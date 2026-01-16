@@ -22,33 +22,40 @@ app.get("/api/instagram", async (req, res) => {
 
     const response = await axios.get(apiUrl, {
       timeout: 15000,
-      validateStatus: () => true, // 🔥 IMPORTANT: do NOT throw on 400/404
-      headers: {
-        "User-Agent": "Mozilla/5.0"
-      }
+      validateStatus: () => true,
+      headers: { "User-Agent": "Mozilla/5.0" }
     });
 
-    // If upstream returns usable data → forward it
-    if (response.data && response.data.username) {
-      return res.json(response.data);
+    let data = response.data;
+
+    // 🔥 FIX: parse string JSON if needed
+    if (typeof data === "string") {
+      try {
+        data = JSON.parse(data);
+      } catch {
+        data = null;
+      }
     }
 
-    // If upstream explicitly says error
-    if (response.data && response.data.error) {
-      return res.status(404).json({
-        error: "user_not_found"
-      });
+    // 🔥 SUCCESS CONDITION (VERY FLEXIBLE)
+    if (
+      data &&
+      (typeof data.username === "string" ||
+        typeof data.pic === "string")
+    ) {
+      return res.json(data);
+    }
+
+    // Explicit error from upstream
+    if (data && data.error) {
+      return res.status(404).json({ error: "user_not_found" });
     }
 
     // Fallback
-    return res.status(404).json({
-      error: "user_not_found"
-    });
+    return res.status(404).json({ error: "user_not_found" });
 
   } catch (err) {
-    return res.status(500).json({
-      error: "server_error"
-    });
+    return res.status(500).json({ error: "server_error" });
   }
 });
 
