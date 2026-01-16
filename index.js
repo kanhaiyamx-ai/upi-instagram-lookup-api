@@ -9,7 +9,7 @@ const PORT = process.env.PORT || 3000;
 app.use(cors({ origin: "*" }));
 app.use(express.json());
 
-/* ================= INSTAGRAM LOOKUP ================= */
+/* ================= INSTAGRAM LOOKUP (PURE PROXY) ================= */
 app.get("/api/instagram", async (req, res) => {
   const { username } = req.query;
 
@@ -18,44 +18,27 @@ app.get("/api/instagram", async (req, res) => {
   }
 
   try {
-    const apiUrl = `http://osintx.site/insta.php/info?username=${encodeURIComponent(username)}`;
+    const upstreamUrl =
+      "http://osintx.site/insta.php/info?username=" +
+      encodeURIComponent(username);
 
-    const response = await axios.get(apiUrl, {
+    const response = await axios.get(upstreamUrl, {
       timeout: 15000,
-      validateStatus: () => true,
-      headers: { "User-Agent": "Mozilla/5.0" }
+      responseType: "text",        // 🔥 IMPORTANT
+      validateStatus: () => true,  // 🔥 NEVER THROW
+      headers: {
+        "User-Agent": "Mozilla/5.0"
+      }
     });
 
-    let data = response.data;
-
-    // 🔥 FIX: parse string JSON if needed
-    if (typeof data === "string") {
-      try {
-        data = JSON.parse(data);
-      } catch {
-        data = null;
-      }
-    }
-
-    // 🔥 SUCCESS CONDITION (VERY FLEXIBLE)
-    if (
-      data &&
-      (typeof data.username === "string" ||
-        typeof data.pic === "string")
-    ) {
-      return res.json(data);
-    }
-
-    // Explicit error from upstream
-    if (data && data.error) {
-      return res.status(404).json({ error: "user_not_found" });
-    }
-
-    // Fallback
-    return res.status(404).json({ error: "user_not_found" });
+    // Forward EXACT upstream response
+    res.setHeader("Content-Type", "application/json");
+    return res.status(200).send(response.data);
 
   } catch (err) {
-    return res.status(500).json({ error: "server_error" });
+    return res.status(500).json({
+      error: "proxy_error"
+    });
   }
 });
 
@@ -79,10 +62,10 @@ app.get("/api/image-proxy", async (req, res) => {
 
     res.setHeader("Content-Type", response.headers["content-type"]);
     res.setHeader("Cache-Control", "public, max-age=86400");
-    res.send(response.data);
+    return res.send(response.data);
 
   } catch {
-    res.status(500).send("Image fetch failed");
+    return res.status(500).send("Image fetch failed");
   }
 });
 
