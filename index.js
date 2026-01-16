@@ -1,68 +1,81 @@
-import express from 'express'
+import express from "express";
+import axios from "axios";
+import cors from "cors";
 
-const app = express()
-const PORT = process.env.PORT || 3000
+const app = express();
+const PORT = process.env.PORT || 3000;
 
-// Home
-app.get('/', (req, res) => {
-  res.send('UPI & Instagram Lookup API running 🚀 | @KILL4R_UR')
-})
+/* ================= MIDDLEWARE ================= */
+app.use(cors({
+  origin: "*",
+  methods: ["GET"],
+  allowedHeaders: ["Content-Type"]
+}));
 
-/* =========================
-   🔥 UPI LOOKUP API
-   ========================= */
-app.get('/api/upi', async (req, res) => {
-  const vpa = req.query.vpa
+app.use(express.json());
 
-  if (!vpa) {
-    return res.status(400).json({ error: 'Missing vpa parameter' })
-  }
-
+/* ================= INSTAGRAM LOOKUP ================= */
+app.get("/api/instagram", async (req, res) => {
   try {
-    const response = await fetch(
-      `https://osintx.site/upi-info.php?vpa=${encodeURIComponent(vpa)}`,
-      { headers: { 'User-Agent': 'Mozilla/5.0' } }
-    )
+    const { username } = req.query;
 
-    const data = await response.text()
+    if (!username) {
+      return res.status(400).json({
+        error: "username_required"
+      });
+    }
 
-    res.setHeader('Access-Control-Allow-Origin', '*')
-    res.type('json').send(data)
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch UPI info' })
+    const apiUrl = `http://osintx.site/insta.php/info?username=${username}`;
+    const response = await axios.get(apiUrl, {
+      timeout: 15000
+    });
+
+    return res.json(response.data);
+
+  } catch (error) {
+    return res.status(500).json({
+      error: "http_error",
+      message: error.message
+    });
   }
-})
+});
 
-/* =========================
-   🔥 INSTAGRAM LOOKUP API
-   ========================= */
-app.get('/api/instagram', async (req, res) => {
-  const username = req.query.username
-
-  if (!username) {
-    return res.status(400).json({ error: 'Missing username parameter' })
-  }
-
+/* ================= IMAGE PROXY (FIXES PROFILE PIC) ================= */
+app.get("/api/image-proxy", async (req, res) => {
   try {
-    const response = await fetch(
-      `http://osintx.site/insta.php/info?username=${encodeURIComponent(username)}`,
-      { headers: { 'User-Agent': 'Mozilla/5.0' } }
-    )
+    const imageUrl = req.query.url;
 
-    const data = await response.text()
+    if (!imageUrl) {
+      return res.status(400).send("Missing image URL");
+    }
 
-    res.setHeader('Access-Control-Allow-Origin', '*')
-    res.type('json').send(data)
-  } catch (err) {
-    res.status(500).json({ error: 'Failed to fetch Instagram data' })
+    const response = await axios.get(imageUrl, {
+      responseType: "arraybuffer",
+      headers: {
+        "User-Agent": "Mozilla/5.0",
+        "Accept": "image/*"
+      },
+      timeout: 15000
+    });
+
+    res.setHeader("Content-Type", response.headers["content-type"]);
+    res.setHeader("Cache-Control", "public, max-age=86400");
+    res.send(response.data);
+
+  } catch (error) {
+    res.status(500).send("Image fetch failed");
   }
-})
+});
 
-// Health check
-app.get('/healthz', (req, res) => {
-  res.json({ status: 'ok' })
-})
+/* ================= HEALTH CHECK ================= */
+app.get("/", (req, res) => {
+  res.json({
+    status: "UP",
+    service: "UPI + Instagram Lookup API"
+  });
+});
 
+/* ================= START SERVER ================= */
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`)
-})
+  console.log(`Server running on port ${PORT}`);
+});
